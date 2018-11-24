@@ -1,3 +1,4 @@
+#include "stdafx.h"
 #include "NoiseSuppression.h"
 CNoiseSuppression::CNoiseSuppression()
 {
@@ -13,8 +14,8 @@ CNoiseSuppression::~CNoiseSuppression()
 	WebRtcNs_Free(pNS_inst);
 	WebRtcNsx_Free(pNSX_inst);
 }
-////////---------------------------------------------------------------------------------------------------------------------------------
-bool CNoiseSuppression::NoiseSuppressionProcessT(char *pData, size_t tSize)//bStyle:true代表定点降噪，false代表浮点降噪
+//---------------------------------------------------------------------------------------------------
+bool CNoiseSuppression::NoiseSuppressionProcessT(char *pData, size_t tSize)
 {
 	switch (m_fsStyle)
 	{
@@ -35,12 +36,17 @@ bool CNoiseSuppression::NoiseSuppressionProcessT(char *pData, size_t tSize)//bSt
 	}
 	return true;
 }
+/*-------------------------------------------------------------------------------------------------
+****32KHZ浮点降噪
+****由于32KHZ采样率数据需要分频因此特殊处理
+****数据采用每次处理10ms数据
+-------------*/
 bool CNoiseSuppression::NoiseSuppressionProcess32K(char *pData, size_t tSize)
 {
-	bool bStatus = true;
-	int frameSize = m_dwSample / 100;
-	int len = frameSize*sizeof(short);
-	for (int index = 0; index < tSize; index += len)
+	bool bStatus = true;//标志位，暂时没有用处
+	size_t frameSize = m_dwSample / 100;//10ms采样数据
+	size_t len = frameSize*sizeof(short);
+	for (size_t index = 0; index < tSize; index += len)
 	{
 		if (tSize - index >= len)
 		{
@@ -48,20 +54,21 @@ bool CNoiseSuppression::NoiseSuppressionProcess32K(char *pData, size_t tSize)
 			//将需要降噪的数据以高频和低频传入对应接口，同时需要注意返回数据也是分高频和低频
 			if (0 == WebRtcNs_Process(pNS_inst, shInL, shInH, shOutL, shOutH))
 			{
-				short shBufferOut[320];
-				//如果降噪成功，则根据降噪后高频和低频数据传入滤波接口，然后用将返回的数据写入文件
+				//如果降噪成功，则根据降噪后高频和低频数据传入滤波接口，然后用将返回的数据填充数据块
 				WebRtcSpl_SynthesisQMF(shOutL, shOutH, 160, (short*)(pData + index), Synthesis_state1, Synthesis_state12);
 			}
 		}
 	}
 	return bStatus;
 }
+
+//32KHZ定点降噪
 bool CNoiseSuppression::NoiseSuppressionProcessX32K(char *pData, size_t tSize)
 {
 	bool bStatus = true;
 	int frameSize = m_dwSample / 100;
-	int len = frameSize*sizeof(short);
-	for (int index = 0; index < tSize; index += len)
+	size_t len = frameSize*sizeof(short);
+	for (size_t index = 0; index < tSize; index += len)
 	{
 		if (tSize - index >= len)
 		{		
@@ -69,7 +76,6 @@ bool CNoiseSuppression::NoiseSuppressionProcessX32K(char *pData, size_t tSize)
 			//将需要降噪的数据以高频和低频传入对应接口，同时需要注意返回数据也是分高频和低频
 			if (0 == WebRtcNsx_Process(pNSX_inst, shInL, shInH, shOutL, shOutH))
 			{
-				short shBufferOut[320];
 				//如果降噪成功，则根据降噪后高频和低频数据传入滤波接口，然后用将返回的数据写入文件
 				WebRtcSpl_SynthesisQMF(shOutL, shOutH, 160, (short*)(pData+index), Synthesis_state1, Synthesis_state12);
 			}
@@ -79,20 +85,20 @@ bool CNoiseSuppression::NoiseSuppressionProcessX32K(char *pData, size_t tSize)
 }
 
 
-
+//非32KHZ定点降噪
 bool CNoiseSuppression::NoiseSuppressionProcessNoX32K(char *pData, size_t tSize)
 {
-	bool bStatus = true;
+	bool bStatus = true;//标志位，暂时没有用处
 	int frameSize = m_dwSample / 100;
-	int len = frameSize*sizeof(short);
-	for (int index = 0; index < tSize; index += len)
+	size_t len = frameSize*sizeof(short);
+	for (size_t index = 0; index < tSize; index += len)
 	{
 		if (tSize - index >= len)
 		{
 
 			if (0 == WebRtcNsx_Process(pNSX_inst, (short *)(pData + index), NULL, shOutData, NULL))
 			{
-				//如果降噪成功，则根据降噪后高频和低频数据传入滤波接口，然后用将返回的数据写入文件
+				//如果降噪成功，则根据降噪后高频和低频数据传入滤波接口，然后用将返回的数据写入数据块
 
 				memcpy((short *)(pData + index), shOutData, len);
 
@@ -101,37 +107,40 @@ bool CNoiseSuppression::NoiseSuppressionProcessNoX32K(char *pData, size_t tSize)
 	}
 	return bStatus;
 }
+
+//非32KHZ浮点降噪
 bool CNoiseSuppression::NoiseSuppressionProcessNo32K(char *pData, size_t tSize)
 {
-	bool bStatus = true;
-	int frameSize = m_dwSample / 100;
-	int len = frameSize*sizeof(short);
-	for (int index = 0; index < tSize; index += len)
+	bool bStatus = true;////标志位，暂时没有用处
+	int frameSize = m_dwSample / 100;//不管原数据多长每次仅取10ms数据处理
+	size_t len = frameSize*sizeof(short);
+	for (size_t index = 0; index < tSize; index += len)
 	{
 		if (tSize - index >= len)
 		{
-
 			if (0 == WebRtcNs_Process(pNS_inst, (short *)(pData + index), NULL, shOutData, NULL))
 			{
-				//如果降噪成功，则根据降噪后高频和低频数据传入滤波接口，然后用将返回的数据写入文件
-
 				memcpy((short *)(pData + index), shOutData, len);
-
 			}
 		}
 	}
 	return bStatus;
 }
+
+//--------初始化数据-----------------------------------------------------------------
 bool CNoiseSuppression::InitNoiseSuppression(DWORD dwSample, int nMode, bool bStyle)
 {
-	pNSX_inst = NULL;
-	pNS_inst = NULL;
+	//-----------公有部分数据------------------
+	pNSX_inst = NULL;//定点
+	pNS_inst = NULL;//浮点
 	m_dwSample = dwSample;
-	m_nMode = nMode;
-	m_bStyle = bStyle;
+	m_nMode = nMode;//有0,1,2,3,4物种模式，数字越大降噪效果越好，但是会降低音质
+	m_bStyle = bStyle;//bStyle:true代表定点降噪，false代表浮点降噪
 	if (m_dwSample != 8000 && m_dwSample != 16000 && m_dwSample != 32000)
 		return false;
 	SetStyle();
+
+	//---------------定点---------------------
 	if (0 != WebRtcNsx_Create(&pNSX_inst))
 	{
 		return false;
@@ -146,6 +155,7 @@ bool CNoiseSuppression::InitNoiseSuppression(DWORD dwSample, int nMode, bool bSt
 	{
 		return false;
 	}
+	//----------------浮点---------------------
 	if (0 != WebRtcNs_Create(&pNS_inst))
 	{
 		return false;
@@ -155,23 +165,29 @@ bool CNoiseSuppression::InitNoiseSuppression(DWORD dwSample, int nMode, bool bSt
 	{
 		return false;
 	}
-
 	if (0 != WebRtcNs_set_policy(pNS_inst, nMode))
 	{
 		return false;
 	}
+
+	//用于32KHZ分频参数的设置
 	memset(filter_state1, 0, sizeof(filter_state1));
 	memset(filter_state12, 0, sizeof(filter_state12));
 	memset(Synthesis_state1, 0, sizeof(Synthesis_state1));
 	memset(Synthesis_state12, 0, sizeof(Synthesis_state12));
-
 	shInL = new short[160];
 	shInH = new short[160];
 	shOutL = new short[160];
 	shOutH = new short[160];
+
+	//非32KHZ需要的参数设置
 	shOutData = new short[dwSample / 100];
 	return true;
 }
+
+/*------------------------------------------
+****通过采样率以及降噪的方式确定调用的函数
+------------------------------------------*/
 void CNoiseSuppression::SetStyle()
 {
 	if (m_dwSample == 8000 || m_dwSample == 16000)
